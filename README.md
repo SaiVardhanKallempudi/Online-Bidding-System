@@ -1058,5 +1058,4 @@ For issues, questions, or contributions:
 - **Health Check**: `http://localhost:8080/actuator/health` (if actuator enabled)
 
 ---
-
-Made with ❤️ for educational institutions
+Thank you
