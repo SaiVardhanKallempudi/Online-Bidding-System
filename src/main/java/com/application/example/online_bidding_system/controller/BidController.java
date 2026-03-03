@@ -73,7 +73,7 @@ public class BidController {
     }
 
     /**
-     * Get highest bid for a stall
+     * Get the highest bid for a stall
      */
     @GetMapping("/stall/{stallId}/highest")
     public ResponseEntity<BidResponse> getHighestBid(@PathVariable Long stallId) {

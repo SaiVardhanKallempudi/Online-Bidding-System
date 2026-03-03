@@ -1,15 +1,13 @@
-package com.application.example.online_bidding_system.entity;
+package com.application. example.online_bidding_system.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import lombok.Getter;
+import jakarta.persistence.*;
+import lombok. Getter;
 import lombok.Setter;
 
 import java.sql.Timestamp;
 
 @Entity
+@Table(name = "email_otp")
 @Getter
 @Setter
 public class EmailOtp {
@@ -17,10 +15,20 @@ public class EmailOtp {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false)
     private String email;
+
+    @Column(nullable = false)
     private String otp;
+
+    @Column(nullable = false)
     private Timestamp createdAt;
 
-    private boolean verified;
+    private Timestamp expiresAt;
 
+    private boolean verified = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private OtpPurpose purpose = OtpPurpose.EMAIL_VERIFICATION;
 }

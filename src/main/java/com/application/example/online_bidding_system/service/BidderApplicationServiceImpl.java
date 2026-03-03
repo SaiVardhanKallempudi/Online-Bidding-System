@@ -1,21 +1,21 @@
-package com.application.example.online_bidding_system. service;
+package com.application.example.online_bidding_system.service;
 
-import com.application.example. online_bidding_system.dto.request.BidderApplicationRequest;
-import com.application.example. online_bidding_system.dto.response.BidderApplicationResponse;
-import com.application.example. online_bidding_system.entity.*;
-import com.application.example.online_bidding_system. exception.BadRequestException;
-import com. application.example.online_bidding_system.exception.ResourceNotFoundException;
-import com. application.example.online_bidding_system.repository. BidderApplicationRepository;
-import com.application.example. online_bidding_system.repository.EmailOtpRepository;
-import com.application.example. online_bidding_system.repository.UserRepository;
-import org.springframework.beans. factory.annotation. Autowired;
+import com.application.example.online_bidding_system.dto.request.BidderApplicationRequest;
+import com.application.example.online_bidding_system.dto.response.BidderApplicationResponse;
+import com.application.example.online_bidding_system.entity.*;
+import com.application.example.online_bidding_system.exception.BadRequestException;
+import com.application.example.online_bidding_system.exception.ResourceNotFoundException;
+import com.application.example.online_bidding_system.repository.BidderApplicationRepository;
+import com.application.example.online_bidding_system.repository.EmailOtpRepository;
+import com.application.example.online_bidding_system.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework. stereotype.Service;
+import org.springframework.stereotype.Service;
 
 import java.sql.Timestamp;
-import java.util. List;
+import java.util.List;
 import java.util.Optional;
-import java.util. stream.Collectors;
+import java.util.stream.Collectors;
 
 @Service
 public class BidderApplicationServiceImpl implements BidderApplicationService {
@@ -35,8 +35,8 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
     @Override
     public ResponseEntity<BidderApplicationResponse> applyAsBidder(BidderApplicationRequest request) {
         // Validate user exists
-        User user = userRepository. findByCollageId(request.getCollageId())
-                .orElseThrow(() -> new ResourceNotFoundException("User", "collegeId", request. getCollageId()));
+        User user = userRepository.findByCollageId(request.getCollageId())
+                .orElseThrow(() -> new ResourceNotFoundException("User", "collegeId", request.getCollageId()));
 
         // Validate student name
         if (request.getStudentName() == null || request.getStudentName().trim().isEmpty()) {
@@ -50,20 +50,9 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
         }
 
         // Validate phone number
-        String phone = String.valueOf(request. getPhoneNumber());
-        if (! phone.matches("^[6-9]\\d{9}$")) {
-            throw new BadRequestException("Invalid phone number.  Must be 10 digits starting with 6-9");
-        }
-
-        // Validate OTP
-        if (request.getOtp() == null || request.getOtp().trim().isEmpty()) {
-            throw new BadRequestException("OTP is required");
-        }
-
-        // Check OTP verification
-        Optional<EmailOtp> otpOptional = emailOtpRepository. findTopByEmailOrderByCreatedAtDesc(request.getStudentEmail());
-        if (otpOptional. isEmpty() || !otpOptional.get().isVerified()) {
-            throw new BadRequestException("Email not verified. Please verify OTP first.");
+        String phone = String.valueOf(request.getPhoneNumber());
+        if (!phone.matches("^[6-9]\\d{9}$")) {
+            throw new BadRequestException("Invalid phone number. Must be 10 digits starting with 6-9");
         }
 
         // Validate terms accepted
@@ -71,28 +60,75 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
             throw new BadRequestException("You must accept the terms and conditions");
         }
 
+        // ✅ Check if email is already verified (Google users or verified during signup)
+        if (user.isEmailVerified()) {
+            System.out.println("✅ Email already verified for user: " + user.getStudentEmail());
+            System.out.println("✅ Skipping OTP verification");
+            // Skip OTP verification for already verified emails
+        } else {
+            // ✅ Email NOT verified - validate OTP
+            System.out.println("⚠️ Email NOT verified for user: " + user.getStudentEmail());
+            System.out.println("⚠️ Checking OTP verification...");
+
+            // Validate OTP exists
+            if (request.getOtp() == null || request.getOtp().trim().isEmpty()) {
+                throw new BadRequestException("OTP is required for unverified emails");
+            }
+
+            // Check OTP verification
+            Optional<EmailOtp> otpOptional = emailOtpRepository.findTopByEmailOrderByCreatedAtDesc(request.getStudentEmail());
+
+            if (otpOptional.isEmpty()) {
+                throw new BadRequestException("No OTP found for this email. Please request OTP first.");
+            }
+
+            EmailOtp savedOtp = otpOptional.get();
+
+            if (!savedOtp.isVerified()) {
+                throw new BadRequestException("Email not verified. Please verify OTP first.");
+            }
+
+            // Check if OTP is expired (5 minutes)
+            long diff = System.currentTimeMillis() - savedOtp.getCreatedAt().getTime();
+            if (diff > 5 * 60 * 1000) {
+                throw new BadRequestException("OTP expired. Please request a new OTP.");
+            }
+
+            // Verify OTP matches
+            if (!savedOtp.getOtp().equals(request.getOtp())) {
+                throw new BadRequestException("Invalid OTP.");
+            }
+
+            // ✅ Mark user email as verified after successful OTP verification
+            user.setEmailVerified(true);
+            userRepository.save(user);
+            System.out.println("✅ Email verified for user: " + user.getStudentEmail());
+        }
+
         // Check if already applied
         if (applicationRepository.findByUser(user).isPresent()) {
-            throw new BadRequestException("You have already applied.  Check your application status.");
+            throw new BadRequestException("You have already applied. Check your application status.");
         }
 
         // Create application
         BidderApplication application = new BidderApplication();
-        application. setUser(user);
+        application.setUser(user);
         application.setPhoneNumber(request.getPhoneNumber());
-        application. setStatus(Status.PENDING);
+        application.setStatus(Status.PENDING);
         application.setReason(request.getReason());
         application.setPreferredStallCategory(request.getPreferredStallCategory());
-        application. setAppliedAt(new Timestamp(System. currentTimeMillis()));
+        application.setAppliedAt(new Timestamp(System.currentTimeMillis()));
 
         applicationRepository.save(application);
+
+        System.out.println("✅ Bidder application submitted successfully for user: " + user.getStudentEmail());
 
         // Build response
         BidderApplicationResponse response = convertToResponse(application);
         response.setStudentEmail(request.getStudentEmail());
-        response.setStudentName(request. getStudentName());
+        response.setStudentName(request.getStudentName());
 
-        return ResponseEntity. ok(response);
+        return ResponseEntity.ok(response);
     }
 
     @Override
@@ -101,7 +137,7 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Application", "id", applicationId));
 
         if (application.getStatus() != Status.PENDING) {
-            throw new BadRequestException("Application already processed.  Current status: " + application.getStatus());
+            throw new BadRequestException("Application already processed. Current status: " + application.getStatus());
         }
 
         // Update application status
@@ -121,10 +157,10 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
                     user.getStudentName()
             );
         } catch (Exception e) {
-            System.err.println("Failed to send approval email:  " + e.getMessage());
+            System.err.println("Failed to send approval email: " + e.getMessage());
         }
 
-        return ResponseEntity. ok("Application approved successfully.  User is now a BIDDER.");
+        return ResponseEntity.ok("Application approved successfully. User is now a BIDDER.");
     }
 
     @Override
@@ -137,12 +173,12 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Application", "id", applicationId));
 
         if (application.getStatus() != Status.PENDING) {
-            throw new BadRequestException("Application already processed. Current status: " + application. getStatus());
+            throw new BadRequestException("Application already processed. Current status: " + application.getStatus());
         }
 
         // Update application status
         application.setStatus(Status.REJECTED);
-        application.setReviewedAt(new Timestamp(System. currentTimeMillis()));
+        application.setReviewedAt(new Timestamp(System.currentTimeMillis()));
         application.setRejectionReason(reason);
         applicationRepository.save(application);
 
@@ -155,7 +191,7 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
                     reason
             );
         } catch (Exception e) {
-            System.err. println("Failed to send rejection email: " + e.getMessage());
+            System.err.println("Failed to send rejection email: " + e.getMessage());
         }
 
         return ResponseEntity.ok("Application rejected.");
@@ -169,14 +205,14 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
         Status oldStatus = application.getStatus();
 
         application.setStatus(newStatus);
-        application.setReviewedAt(new Timestamp(System. currentTimeMillis()));
+        application.setReviewedAt(new Timestamp(System.currentTimeMillis()));
         applicationRepository.save(application);
 
         // If approved, update user role
         if (newStatus == Status.APPROVED) {
             User user = application.getUser();
             user.setRole(Role.BIDDER);
-            userRepository. save(user);
+            userRepository.save(user);
 
             try {
                 emailService.sendApplicationApprovedEmail(
@@ -184,7 +220,7 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
                         user.getStudentName()
                 );
             } catch (Exception e) {
-                System.err.println("Failed to send email:  " + e.getMessage());
+                System.err.println("Failed to send email: " + e.getMessage());
             }
         }
 
@@ -211,10 +247,10 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
             return Status.NOT_APPLIED;
         }
 
-        Optional<User> userOpt = userRepository. findByStudentEmail(studentEmail);
+        Optional<User> userOpt = userRepository.findByStudentEmail(studentEmail);
 
         if (userOpt.isEmpty()) {
-            return Status. NOT_APPLIED;
+            return Status.NOT_APPLIED;
         }
 
         return applicationRepository.findByUser(userOpt.get())
@@ -224,7 +260,7 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
 
     @Override
     public List<BidderApplicationResponse> getAllApplications() {
-        return applicationRepository. findAll().stream()
+        return applicationRepository.findAll().stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
     }
@@ -241,9 +277,9 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
         response.setApplicationId(app.getApplicationId());
         response.setStudentName(app.getUser().getStudentName());
         response.setStudentEmail(app.getUser().getStudentEmail());
-        response.setPhoneNumber(app. getPhoneNumber());
+        response.setPhoneNumber(app.getPhoneNumber());
         response.setStatus(app.getStatus());
-        response.setReason(app. getReason());
+        response.setReason(app.getReason());
         response.setPreferredStallCategory(app.getPreferredStallCategory());
         response.setAppliedAt(app.getAppliedAt());
         response.setReviewedAt(app.getReviewedAt());
