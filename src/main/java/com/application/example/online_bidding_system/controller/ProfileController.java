@@ -13,6 +13,7 @@ import com.application.example.online_bidding_system. repository.UserRepository;
 import org.springframework.beans.factory. annotation.Autowired;
 import org. springframework.http.ResponseEntity;
 import org.springframework.security. core.annotation.AuthenticationPrincipal;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org. springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -36,6 +37,9 @@ public class ProfileController {
 
     @Autowired
     private BidderApplicationRepository bidderApplicationRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     /**
      * Get current user's profile
@@ -65,6 +69,9 @@ public class ProfileController {
 
         if (updates.containsKey("studentName")) {
             user.setStudentName((String) updates.get("studentName"));
+        }
+        if (updates.containsKey("collageId")) {
+            user.setCollageId((String) updates.get("collageId"));
         }
         if (updates. containsKey("phone")) {
             user.setPhone((String) updates.get("phone"));
@@ -245,5 +252,55 @@ public class ProfileController {
         response.setProfilePicture(user.getProfilePicture());
         response.setEmailVerified(user. isEmailVerified());
         return response;
+    }
+    /**
+     * Change password (or set initial password for OAuth users)
+     */
+    @PutMapping("/change-password")
+    public ResponseEntity<Map<String, String>> changePassword(
+            @AuthenticationPrincipal User currentUser,
+            @RequestBody Map<String, String> request) {
+
+        if (currentUser == null) {
+            throw new UnauthorizedException("You must be logged in to change password");
+        }
+
+        User user = userRepository.findById(currentUser.getStudentId())
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUser.getStudentId()));
+
+        String newPassword = request.get("newPassword");
+
+        // ✅ Check if this is an OAuth user setting password for first time
+        boolean isOAuthUser = user.getPassword() == null || user.getPassword().isEmpty();
+
+        if (isOAuthUser) {
+            // OAuth user setting password for first time - no current password needed
+            System.out.println("OAuth user setting initial password");
+            user.setPassword(passwordEncoder.encode(newPassword));
+            userRepository.save(user);
+
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Password set successfully");
+            return ResponseEntity.ok(response);
+        }
+
+        // Regular user changing password - verify current password
+        String currentPassword = request.get("currentPassword");
+
+        if (currentPassword == null || currentPassword.isEmpty()) {
+            throw new IllegalArgumentException("Current password is required");
+        }
+
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw new IllegalArgumentException("Current password is incorrect");
+        }
+
+        // Update password
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "Password changed successfully");
+        return ResponseEntity.ok(response);
     }
 }

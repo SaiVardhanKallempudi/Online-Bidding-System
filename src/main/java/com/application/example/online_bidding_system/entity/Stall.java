@@ -29,6 +29,8 @@ public class Stall {
 
     private String location;
 
+    @Lob
+    @Column(columnDefinition = "LONGTEXT")
     private String image;
 
     // Base price - minimum starting bid
