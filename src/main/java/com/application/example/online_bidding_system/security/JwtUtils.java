@@ -1,9 +1,9 @@
-package com.application.example.online_bidding_system. security;
+package com.application.example.online_bidding_system.security;
 
-import com.application.example. online_bidding_system.entity.User;
-import io. jsonwebtoken.*;
-import io.jsonwebtoken. security.Keys;
-import org.springframework. beans.factory.annotation.Value;
+import com.application.example.online_bidding_system.entity.User;
+import io.jsonwebtoken.*;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
@@ -15,14 +15,14 @@ import java.util.Map;
 @Component
 public class JwtUtils {
 
-    @Value("${jwt.secret:CollegeBiddingSystemSuperSecretKeyForJWT2024MustBe32CharsLong}")
+    @Value("${jwt.secret}")
     private String jwtSecret;
 
     @Value("${jwt.expiration:86400000}")
     private long jwtExpiration;
 
     private SecretKey getSigningKey() {
-        byte[] keyBytes = jwtSecret.getBytes(StandardCharsets. UTF_8);
+        byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
@@ -37,7 +37,7 @@ public class JwtUtils {
                 .claims(claims)
                 .subject(user.getStudentEmail())
                 .issuedAt(new Date())
-                .expiration(new Date(System. currentTimeMillis() + jwtExpiration))
+                .expiration(new Date(System.currentTimeMillis() + jwtExpiration))
                 .signWith(getSigningKey())
                 .compact();
     }
@@ -62,7 +62,7 @@ public class JwtUtils {
     public boolean validateToken(String token) {
         try {
             Jwts.parser()
-                    . verifyWith(getSigningKey())
+                    .verifyWith(getSigningKey())
                     .build()
                     .parseSignedClaims(token);
             return true;

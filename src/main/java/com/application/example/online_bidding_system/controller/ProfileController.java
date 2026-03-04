@@ -85,7 +85,7 @@ public class ProfileController {
         if (updates.containsKey("year")) {
             user.setYear((Integer) updates.get("year"));
         }
-        if (updates. containsKey("gender")) {
+        if (updates.containsKey("gender")) {
             user.setGender((String) updates.get("gender"));
         }
 
@@ -250,7 +250,9 @@ public class ProfileController {
         response.setPhone(user.getPhone());
         response.setRole(user.getRole());
         response.setProfilePicture(user.getProfilePicture());
-        response.setEmailVerified(user. isEmailVerified());
+        response.setEmailVerified(user.isEmailVerified());
+        response.setAddress(user.getAddress());
+
         return response;
     }
     /**
