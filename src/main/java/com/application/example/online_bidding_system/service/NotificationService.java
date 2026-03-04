@@ -1,111 +1,86 @@
-package com.application. example.online_bidding_system.service;
+package com.application.example.online_bidding_system.service;
 
-import com. application.example.online_bidding_system.dto.websocket.BidNotification;
-import com. application.example.online_bidding_system.entity. Stall;
-import org.springframework.beans. factory.annotation. Autowired;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org. springframework.stereotype.Service;
-
-import java. math.BigDecimal;
-import java.sql.Timestamp;
+import com.application.example.online_bidding_system.dto.request.CreateNotificationRequest;
+import com.application.example.online_bidding_system.dto.response.NotificationResponse;
+import com.application.example.online_bidding_system.entity.Notification;
+import com.application.example.online_bidding_system.repository.NotificationRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class NotificationService {
 
     @Autowired
-    private SimpMessagingTemplate messagingTemplate;
+    private NotificationRepository notificationRepository;
 
-    @Autowired
-    private Emailservice emailService;
-
-    /**
-     * Broadcast new bid to all users watching a stall
-     */
-    public void broadcastNewBid(Long stallId, String stallName, BigDecimal amount,
-                                String bidderName, int totalBids) {
-        BidNotification notification = new BidNotification();
-        notification. setType("NEW_BID");
-        notification.setStallId(stallId);
-        notification.setStallName(stallName);
-        notification.setCurrentHighestBid(amount);
-        notification.setHighestBidderName(bidderName);
-        notification. setTotalBids(totalBids);
-        notification.setTimestamp(Timestamp. valueOf(LocalDateTime.now()));
-        notification.setMessage("New highest bid: ₹" + amount);
-
-        messagingTemplate.convertAndSend("/topic/stall/" + stallId + "/bids", notification);
+    public NotificationResponse createNotification(CreateNotificationRequest req) {
+        Notification notification = new Notification();
+        notification.setUserId(req.userId);
+        notification.setType(req.type);
+        notification.setTitle(req.title);
+        notification.setMessage(req.message);
+        notification.setRelatedEntityId(req.relatedEntityId);
+        notification.setRelatedEntityType(req.relatedEntityType);
+        notification.setRead(false);
+        notification.setCreatedAt(LocalDateTime.now());
+        Notification saved = notificationRepository.save(notification);
+        return toResponse(saved);
     }
 
-    /**
-     * Notify user they've been outbid
-     */
-    public void notifyOutbid(Long userId, Long stallId, String stallName,
-                             BigDecimal newHighestBid, String newHighestBidder) {
-        BidNotification notification = new BidNotification();
-        notification. setType("OUTBID");
-        notification.setStallId(stallId);
-        notification.setStallName(stallName);
-        notification.setCurrentHighestBid(newHighestBid);
-        notification.setHighestBidderName(newHighestBidder);
-        notification.setMessage("You've been outbid on " + stallName + "! New highest:  ₹" + newHighestBid);
-
-        // Send via WebSocket
-        messagingTemplate.convertAndSendToUser(
-                userId.toString(),
-                "/queue/notifications",
-                notification
-        );
+    public List<NotificationResponse> getAllNotifications(Long userId) {
+        return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId)
+                .stream().map(this::toResponse).collect(Collectors.toList());
     }
 
-    /**
-     * Notify winner via WebSocket
-     */
-    public void notifyWinner(Long userId, Stall stall, BigDecimal winningPrice) {
-        BidNotification notification = new BidNotification();
-        notification.setType("WINNER");
-        notification.setStallId(stall.getStallId());
-        notification.setStallName(stall.getStallName());
-        notification. setCurrentHighestBid(winningPrice);
-        notification. setMessage("🎉 Congratulations! You won " + stall.getStallName() + " at ₹" + winningPrice);
-
-        // Send to specific user
-        messagingTemplate.convertAndSendToUser(
-                userId.toString(),
-                "/queue/notifications",
-                notification
-        );
-
-        // Broadcast winner announcement to everyone watching the stall
-        notification.setMessage("🏆 Winner declared for " + stall.getStallName());
-        messagingTemplate.convertAndSend("/topic/stall/" + stall. getStallId() + "/winner", notification);
+    public List<NotificationResponse> getUnreadNotifications(Long userId) {
+        return notificationRepository.findByUserIdAndIsReadFalseOrderByCreatedAtDesc(userId)
+                .stream().map(this::toResponse).collect(Collectors.toList());
     }
 
-    /**
-     * Broadcast stall status change
-     */
-    public void broadcastStallStatusChange(Stall stall, String message) {
-        BidNotification notification = new BidNotification();
-        notification. setType("STALL_STATUS");
-        notification.setStallId(stall.getStallId());
-        notification.setStallName(stall.getStallName());
-        notification.setMessage(message);
-        notification.setTimestamp(Timestamp. valueOf(LocalDateTime. now()));
-
-        messagingTemplate.convertAndSend("/topic/stalls/status", notification);
+    public long getUnreadCount(Long userId) {
+        return notificationRepository.countByUserIdAndIsReadFalse(userId);
     }
 
-    /**
-     * Send outbid email notification
-     */
-    public void sendOutbidEmailNotification(String email, String studentName,
-                                            String stallName, BigDecimal newHighestBid) {
-        try {
-            emailService.sendOutbidEmail(email, studentName, stallName, newHighestBid. toString());
-        } catch (Exception e) {
-            System. err.println("Failed to send outbid email: " + e.getMessage());
+    public void markAsRead(Long notificationId, Long userId) {
+        Notification n = notificationRepository.findById(notificationId)
+                .filter(notif -> notif.getUserId().equals(userId)).orElseThrow();
+        n.setRead(true);
+        notificationRepository.save(n);
+    }
+
+    public void markAllAsRead(Long userId) {
+        List<Notification> notifications = notificationRepository.findByUserIdAndIsReadFalseOrderByCreatedAtDesc(userId);
+        for (Notification n : notifications) {
+            n.setRead(true);
         }
+        notificationRepository.saveAll(notifications);
     }
 
+    public void deleteNotification(Long notificationId, Long userId) {
+        Notification n = notificationRepository.findById(notificationId)
+                .filter(notif -> notif.getUserId().equals(userId)).orElseThrow();
+        notificationRepository.delete(n);
+    }
 
+    public void deleteAllNotifications(Long userId) {
+        List<Notification> notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        notificationRepository.deleteAll(notifications);
+    }
+
+    private NotificationResponse toResponse(Notification n) {
+        NotificationResponse r = new NotificationResponse();
+        r.id = n.getId();
+        r.userId = n.getUserId();
+        r.type = n.getType();
+        r.title = n.getTitle();
+        r.message = n.getMessage();
+        r.relatedEntityId = n.getRelatedEntityId();
+        r.relatedEntityType = n.getRelatedEntityType();
+        r.isRead = n.isRead();
+        r.createdAt = n.getCreatedAt();
+        return r;
+    }
 }

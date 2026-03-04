@@ -275,8 +275,20 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
     private BidderApplicationResponse convertToResponse(BidderApplication app) {
         BidderApplicationResponse response = new BidderApplicationResponse();
         response.setApplicationId(app.getApplicationId());
-        response.setStudentName(app.getUser().getStudentName());
-        response.setStudentEmail(app.getUser().getStudentEmail());
+        // User details
+        User user = app.getUser();
+        if (user != null) {
+            response.setUserId(user.getStudentId());
+            response.setStudentName(user.getStudentName());
+            response.setStudentEmail(user.getStudentEmail());
+            response.setCollageId(user.getCollageId());
+            response.setDepartment(user.getDepartment());
+            response.setYear(user.getYear());
+            response.setGender(user.getGender());
+            response.setPhone(user.getPhone());
+            response.setProfilePicture(user.getProfilePicture());
+        }
+
         response.setPhoneNumber(app.getPhoneNumber());
         response.setStatus(app.getStatus());
         response.setReason(app.getReason());
