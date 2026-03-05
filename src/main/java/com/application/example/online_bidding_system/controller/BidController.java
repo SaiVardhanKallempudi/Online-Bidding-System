@@ -30,7 +30,7 @@ public class BidController {
      * Place a bid (Only BIDDER role can place bids)
      */
     @PostMapping("/place")
-    @PreAuthorize("hasAuthority('BIDDER') or hasAuthority('ADMIN')")
+    @PreAuthorize("hasRole('BIDDER') or hasRole('ADMIN')")
     public ResponseEntity<BidResponse> placeBid(
             @AuthenticationPrincipal User user,
             @Valid @RequestBody BidRequest request) {
