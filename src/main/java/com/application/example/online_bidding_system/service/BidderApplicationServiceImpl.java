@@ -32,85 +32,56 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
     @Autowired
     private Emailservice emailService;
 
+    @Autowired
+    private NotificationTriggerService notificationTrigger; // ✅ already wired — now used
+
     @Override
     public ResponseEntity<BidderApplicationResponse> applyAsBidder(BidderApplicationRequest request) {
-        // Validate user exists
         User user = userRepository.findByCollageId(request.getCollageId())
                 .orElseThrow(() -> new ResourceNotFoundException("User", "collegeId", request.getCollageId()));
 
-        // Validate student name
-        if (request.getStudentName() == null || request.getStudentName().trim().isEmpty()) {
+        if (request.getStudentName() == null || request.getStudentName().trim().isEmpty())
             throw new BadRequestException("Student name is required");
-        }
 
-        // Validate email format
         if (request.getStudentEmail() == null ||
-                !request.getStudentEmail().matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")) {
+                !request.getStudentEmail().matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"))
             throw new BadRequestException("Invalid email format");
-        }
 
-        // Validate phone number
         String phone = String.valueOf(request.getPhoneNumber());
-        if (!phone.matches("^[6-9]\\d{9}$")) {
+        if (!phone.matches("^[6-9]\\d{9}$"))
             throw new BadRequestException("Invalid phone number. Must be 10 digits starting with 6-9");
-        }
 
-        // Validate terms accepted
-        if (!request.isTermsAccepted()) {
+        if (!request.isTermsAccepted())
             throw new BadRequestException("You must accept the terms and conditions");
-        }
 
-        // ✅ Check if email is already verified (Google users or verified during signup)
         if (user.isEmailVerified()) {
-            System.out.println("✅ Email already verified for user: " + user.getStudentEmail());
-            System.out.println("✅ Skipping OTP verification");
-            // Skip OTP verification for already verified emails
+            System.out.println("✅ Email already verified — skipping OTP check");
         } else {
-            // ✅ Email NOT verified - validate OTP
-            System.out.println("⚠️ Email NOT verified for user: " + user.getStudentEmail());
-            System.out.println("⚠️ Checking OTP verification...");
-
-            // Validate OTP exists
-            if (request.getOtp() == null || request.getOtp().trim().isEmpty()) {
+            if (request.getOtp() == null || request.getOtp().trim().isEmpty())
                 throw new BadRequestException("OTP is required for unverified emails");
-            }
 
-            // Check OTP verification
             Optional<EmailOtp> otpOptional = emailOtpRepository.findTopByEmailOrderByCreatedAtDesc(request.getStudentEmail());
-
-            if (otpOptional.isEmpty()) {
+            if (otpOptional.isEmpty())
                 throw new BadRequestException("No OTP found for this email. Please request OTP first.");
-            }
 
             EmailOtp savedOtp = otpOptional.get();
-
-            if (!savedOtp.isVerified()) {
+            if (!savedOtp.isVerified())
                 throw new BadRequestException("Email not verified. Please verify OTP first.");
-            }
 
-            // Check if OTP is expired (5 minutes)
             long diff = System.currentTimeMillis() - savedOtp.getCreatedAt().getTime();
-            if (diff > 5 * 60 * 1000) {
+            if (diff > 5 * 60 * 1000)
                 throw new BadRequestException("OTP expired. Please request a new OTP.");
-            }
 
-            // Verify OTP matches
-            if (!savedOtp.getOtp().equals(request.getOtp())) {
+            if (!savedOtp.getOtp().equals(request.getOtp()))
                 throw new BadRequestException("Invalid OTP.");
-            }
 
-            // ✅ Mark user email as verified after successful OTP verification
             user.setEmailVerified(true);
             userRepository.save(user);
-            System.out.println("✅ Email verified for user: " + user.getStudentEmail());
         }
 
-        // Check if already applied
-        if (applicationRepository.findByUser(user).isPresent()) {
+        if (applicationRepository.findByUser(user).isPresent())
             throw new BadRequestException("You have already applied. Check your application status.");
-        }
 
-        // Create application
         BidderApplication application = new BidderApplication();
         application.setUser(user);
         application.setPhoneNumber(request.getPhoneNumber());
@@ -118,16 +89,16 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
         application.setReason(request.getReason());
         application.setPreferredStallCategory(request.getPreferredStallCategory());
         application.setAppliedAt(new Timestamp(System.currentTimeMillis()));
-
         applicationRepository.save(application);
 
-        System.out.println("✅ Bidder application submitted successfully for user: " + user.getStudentEmail());
+        // ✅ Confirm application received
+        notificationTrigger.notifyApplicationReceived(user.getStudentId());
 
-        // Build response
+        System.out.println("✅ Bidder application submitted for: " + user.getStudentEmail());
+
         BidderApplicationResponse response = convertToResponse(application);
         response.setStudentEmail(request.getStudentEmail());
         response.setStudentName(request.getStudentName());
-
         return ResponseEntity.ok(response);
     }
 
@@ -136,30 +107,28 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
         BidderApplication application = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Application", "id", applicationId));
 
-        if (application.getStatus() != Status.PENDING) {
-            throw new BadRequestException("Application already processed. Current status: " + application.getStatus());
-        }
+        if (application.getStatus() != Status.PENDING)
+            throw new BadRequestException("Application already processed. Status: " + application.getStatus());
 
-        // Update application status
         application.setStatus(Status.APPROVED);
         application.setReviewedAt(new Timestamp(System.currentTimeMillis()));
         applicationRepository.save(application);
 
-        // Update user role to BIDDER
         User user = application.getUser();
         user.setRole(Role.BIDDER);
         userRepository.save(user);
 
-        // Send approval email
+        // ✅ In-app notification
+        notificationTrigger.notifyApplicationApproved(user.getStudentId());
+
+        // Email
         try {
-            emailService.sendApplicationApprovedEmail(
-                    user.getStudentEmail(),
-                    user.getStudentName()
-            );
+            emailService.sendApplicationApprovedEmail(user.getStudentEmail(), user.getStudentName());
         } catch (Exception e) {
             System.err.println("Failed to send approval email: " + e.getMessage());
         }
 
+        System.out.println("✅ Application approved for: " + user.getStudentEmail());
         return ResponseEntity.ok("Application approved successfully. User is now a BIDDER.");
     }
 
@@ -172,28 +141,27 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
         BidderApplication application = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Application", "id", applicationId));
 
-        if (application.getStatus() != Status.PENDING) {
-            throw new BadRequestException("Application already processed. Current status: " + application.getStatus());
-        }
+        if (application.getStatus() != Status.PENDING)
+            throw new BadRequestException("Application already processed. Status: " + application.getStatus());
 
-        // Update application status
         application.setStatus(Status.REJECTED);
         application.setReviewedAt(new Timestamp(System.currentTimeMillis()));
         application.setRejectionReason(reason);
         applicationRepository.save(application);
 
-        // Send rejection email
         User user = application.getUser();
+
+        // ✅ In-app notification
+        notificationTrigger.notifyApplicationRejected(user.getStudentId(), reason);
+
+        // Email
         try {
-            emailService.sendApplicationRejectedEmail(
-                    user.getStudentEmail(),
-                    user.getStudentName(),
-                    reason
-            );
+            emailService.sendApplicationRejectedEmail(user.getStudentEmail(), user.getStudentName(), reason);
         } catch (Exception e) {
             System.err.println("Failed to send rejection email: " + e.getMessage());
         }
 
+        System.out.println("❌ Application rejected for: " + user.getStudentEmail());
         return ResponseEntity.ok("Application rejected.");
     }
 
@@ -203,25 +171,25 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Application", "id", applicationId));
 
         Status oldStatus = application.getStatus();
-
         application.setStatus(newStatus);
         application.setReviewedAt(new Timestamp(System.currentTimeMillis()));
         applicationRepository.save(application);
 
-        // If approved, update user role
+        User user = application.getUser();
+
         if (newStatus == Status.APPROVED) {
-            User user = application.getUser();
             user.setRole(Role.BIDDER);
             userRepository.save(user);
-
+            // ✅ Notify approval via status update path too
+            notificationTrigger.notifyApplicationApproved(user.getStudentId());
             try {
-                emailService.sendApplicationApprovedEmail(
-                        user.getStudentEmail(),
-                        user.getStudentName()
-                );
+                emailService.sendApplicationApprovedEmail(user.getStudentEmail(), user.getStudentName());
             } catch (Exception e) {
                 System.err.println("Failed to send email: " + e.getMessage());
             }
+        } else if (newStatus == Status.REJECTED) {
+            // ✅ Notify rejection via status update path too
+            notificationTrigger.notifyApplicationRejected(user.getStudentId(), application.getRejectionReason());
         }
 
         return ResponseEntity.ok("Status updated from " + oldStatus + " to " + newStatus);
@@ -243,16 +211,9 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
 
     @Override
     public Status hasUserAlreadyApplied(String studentEmail) {
-        if (studentEmail == null || studentEmail.isEmpty()) {
-            return Status.NOT_APPLIED;
-        }
-
+        if (studentEmail == null || studentEmail.isEmpty()) return Status.NOT_APPLIED;
         Optional<User> userOpt = userRepository.findByStudentEmail(studentEmail);
-
-        if (userOpt.isEmpty()) {
-            return Status.NOT_APPLIED;
-        }
-
+        if (userOpt.isEmpty()) return Status.NOT_APPLIED;
         return applicationRepository.findByUser(userOpt.get())
                 .map(BidderApplication::getStatus)
                 .orElse(Status.NOT_APPLIED);
@@ -275,7 +236,6 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
     private BidderApplicationResponse convertToResponse(BidderApplication app) {
         BidderApplicationResponse response = new BidderApplicationResponse();
         response.setApplicationId(app.getApplicationId());
-        // User details
         User user = app.getUser();
         if (user != null) {
             response.setUserId(user.getStudentId());
@@ -288,7 +248,6 @@ public class BidderApplicationServiceImpl implements BidderApplicationService {
             response.setPhone(user.getPhone());
             response.setProfilePicture(user.getProfilePicture());
         }
-
         response.setPhoneNumber(app.getPhoneNumber());
         response.setStatus(app.getStatus());
         response.setReason(app.getReason());
