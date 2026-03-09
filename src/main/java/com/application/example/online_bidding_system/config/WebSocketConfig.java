@@ -21,7 +21,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws-bidding")
                 .setAllowedOrigins("http://localhost:4200", "https://bidmart.me",           // add production
-                        "https://www.bidmart.me")
+                        "https://www.bidmart.me", "https://api.bidmart.me")
                 .withSockJS();
     }
 }
