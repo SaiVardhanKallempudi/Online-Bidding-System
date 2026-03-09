@@ -59,7 +59,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         if (userOptional.isPresent()) {
             User user = userOptional.get();
 
-            // ✅ Update Google info and ALWAYS set emailVerified = true
+            // Update Google info and ALWAYS set emailVerified = true
             if (user.getGoogleId() == null) {
                 user.setGoogleId(googleId);
                 log.info("✅ Setting Google ID for user: {}", email);
@@ -69,7 +69,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 log.info("✅ Setting profile picture for user: {}", email);
             }
 
-            // ✅ IMPORTANT: Always set emailVerified = true for Google users
+            //  IMPORTANT: Always set emailVerified = true for Google users
             if (!user.isEmailVerified()) {
                 user.setEmailVerified(true);
                 log.info("✅ Setting emailVerified=true for Google user: {}", email);
@@ -90,7 +90,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             userData.put("studentEmail", user.getStudentEmail());
             userData.put("role", user.getRole() != null ? user.getRole().name() : "USER");
             userData.put("profilePicture", user.getProfilePicture());
-            userData.put("emailVerified", user.isEmailVerified()); // ✅ Will be true
+            userData.put("emailVerified", user.isEmailVerified()); //  Will be true
             userData.put("collageId", user.getCollageId());
             userData.put("department", user.getDepartment());
             userData.put("year", user.getYear());
@@ -103,13 +103,13 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                     StandardCharsets.UTF_8
             );
 
-            // ✅ Redirect to Angular app with token and user data
+            //  Redirect to Angular app with token and user data
             String redirectUrl = frontendUrl + "/oauth/callback?token=" + token + "&user=" + userJson;
             log.info("Redirecting to: {}", redirectUrl);
 
             getRedirectStrategy().sendRedirect(request, response, redirectUrl);
         } else {
-            // ✅ User NOT found - redirect with error message
+            //  User NOT found - redirect with error message
             log.warn("User not found for email: {}. User must sign up first.", email);
 
             String errorMessage = "No account found with this email. Please sign up first, then you can link your Google account.";
