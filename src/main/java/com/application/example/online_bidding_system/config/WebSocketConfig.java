@@ -20,8 +20,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws-bidding")
-                .setAllowedOrigins("http://localhost:4200", "https://bidmart.me",           // add production
-                        "https://www.bidmart.me", "https://api.bidmart.me")
+                .setAllowedOrigins("http://localhost:4200",
+                        "https://bidmart.me",
+                        "https://www.bidmart.me",
+                        "https://api.bidmart.me",
+                        "https://online-bidding-system-frontend.vercel.app",
+                        "https://bidmart-api-c6bqa7fdd0cbc5ee.southeastasia-01.azurewebsites.net")
                 .withSockJS();
     }
 }

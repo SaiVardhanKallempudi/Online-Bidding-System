@@ -12,8 +12,12 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOrigins("http://localhost:4200", "https://bidmart.me",           // add production
-                        "https://www.bidmart.me", "https://api.bidmart.me")
+                .allowedOrigins("http://localhost:4200",
+                        "https://bidmart.me",
+                        "https://www.bidmart.me",
+                        "https://api.bidmart.me",
+                        "https://online-bidding-system-frontend.vercel.app",
+                        "https://bidmart-api-c6bqa7fdd0cbc5ee.southeastasia-01.azurewebsites.net")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
                 .allowedHeaders("*")
                 .exposedHeaders("Authorization")
