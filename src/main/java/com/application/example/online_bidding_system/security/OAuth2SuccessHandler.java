@@ -43,7 +43,6 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
                                         Authentication authentication) throws IOException, ServletException {
 
-        log.info("OAuth2 authentication success handler called");
 
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
         String email = oAuth2User.getAttribute("email");
@@ -51,7 +50,6 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String picture = oAuth2User.getAttribute("picture");
         String googleId = oAuth2User.getAttribute("sub");
 
-        log.info("OAuth2 user email: {}, name: {}", email, name);
 
         // Find user - DON'T create new user automatically
         Optional<User> userOptional = userRepository.findByStudentEmail(email);
@@ -62,26 +60,21 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             // Update Google info and ALWAYS set emailVerified = true
             if (user.getGoogleId() == null) {
                 user.setGoogleId(googleId);
-                log.info("✅ Setting Google ID for user: {}", email);
             }
             if (user.getProfilePicture() == null && picture != null) {
                 user.setProfilePicture(picture);
-                log.info("✅ Setting profile picture for user: {}", email);
             }
 
             //  IMPORTANT: Always set emailVerified = true for Google users
             if (!user.isEmailVerified()) {
                 user.setEmailVerified(true);
-                log.info("✅ Setting emailVerified=true for Google user: {}", email);
             }
 
             userRepository.save(user);
 
-            log.info("User found and updated in database: {}", user.getStudentEmail());
 
             // Generate JWT token
             String token = jwtUtils.generateToken(user);
-            log.info("JWT token generated successfully");
 
             // Create user data for frontend
             Map<String, Object> userData = new HashMap<>();
@@ -105,7 +98,6 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
             //  Redirect to Angular app with token and user data
             String redirectUrl = frontendUrl + "/oauth/callback?token=" + token + "&user=" + userJson;
-            log.info("Redirecting to: {}", redirectUrl);
 
             getRedirectStrategy().sendRedirect(request, response, redirectUrl);
         } else {
@@ -116,7 +108,6 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             String redirectUrl = frontendUrl + "/oauth/callback?error=" +
                     URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
 
-            log.info("Redirecting with error to: {}", redirectUrl);
             getRedirectStrategy().sendRedirect(request, response, redirectUrl);
         }
     }

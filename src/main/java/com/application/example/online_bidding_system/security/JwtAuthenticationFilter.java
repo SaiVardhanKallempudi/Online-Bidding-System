@@ -43,12 +43,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (user != null && user.isActive()) {
                     SimpleGrantedAuthority authority =
                             new SimpleGrantedAuthority("ROLE_" + role);
-                    System.out.println("=== JWT DEBUG ===");
-                    System.out.println("Email: " + email);
-                    System.out.println("Role from token: " + role);
-                    System.out.println("Authority stored: ROLE_" + role);
-                    System.out.println("User active: " + user.isActive());
-                    System.out.println("=================");
 
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(
